@@ -1,6 +1,6 @@
 services:
   claude-proxy:
-    build: .
+    image: ghcr.io/saschahenning/claude-max-api-proxy:latest
     container_name: claude-max-api-proxy
     restart: unless-stopped
     ports:

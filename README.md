@@ -1,5 +1,7 @@
 # Claude Max API Proxy
 
+[![Build and Publish Docker Image](https://github.com/SaschaHenning/claude-max-api-proxy/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/SaschaHenning/claude-max-api-proxy/actions/workflows/docker-publish.yml)
+
 **Use your Claude Max subscription ($200/month) with any OpenAI-compatible client — no separate API costs!**
 
 This provider wraps the Claude Code CLI as a subprocess and exposes an OpenAI-compatible HTTP API, allowing tools like Clawdbot, Continue.dev, or any OpenAI-compatible client to use your Claude Max subscription instead of paying per-API-call.
@@ -56,21 +58,16 @@ Your App (Clawdbot, etc.)
 
 ### Option A: Portainer Stack (Recommended for Proxmox)
 
+The Docker image is automatically built and published to GitHub Container Registry on every push to `main`.
+
 1. Open **Portainer** → **Stacks** → **Add Stack**
 2. Name: `claude-max-api-proxy`
-3. Select **Repository** as build method:
-   - **Repository URL**: `https://github.com/SaschaHenning/claude-max-api-proxy`
-   - **Repository reference**: `refs/heads/main`
-   - **Compose path**: `docker-compose.yml`
-4. Click **Deploy the stack**
-5. Wait for the build to complete (first build takes ~1–2 minutes)
-
-Alternatively, paste this **docker-compose** directly into the Portainer **Web editor**:
+3. Select **Web editor** and paste:
 
 ```yaml
 services:
   claude-proxy:
-    build: .
+    image: ghcr.io/saschahenning/claude-max-api-proxy:latest
     container_name: claude-max-api-proxy
     restart: unless-stopped
     ports:
@@ -85,7 +82,9 @@ volumes:
   claude-config:
 ```
 
-> **Note:** If using the Web editor, Portainer cannot build from source. Use a pre-built image or deploy via Repository / CLI instead.
+4. Click **Deploy the stack**
+
+To update to the latest image later: **Stack** → **Editor** → **Update the stack** with **Re-pull image** enabled.
 
 ### Option B: Docker Compose (CLI)
 
@@ -98,7 +97,6 @@ docker compose up -d
 ### Option C: Docker Run
 
 ```bash
-docker build -t claude-max-api-proxy .
 docker run -d \
   --name claude-max-api-proxy \
   --restart unless-stopped \
@@ -106,7 +104,7 @@ docker run -d \
   -v claude-config:/root/.claude \
   -e HOST=0.0.0.0 \
   -e PORT=3456 \
-  claude-max-api-proxy
+  ghcr.io/saschahenning/claude-max-api-proxy:latest
 ```
 
 ### Authenticate Claude CLI (Required Once)
@@ -267,9 +265,9 @@ Docker files:
 
 ### "Claude CLI not found" (Docker)
 
-The CLI is bundled in the Docker image. If you see this error, the image may not have built correctly. Rebuild with:
+The CLI is bundled in the Docker image. If you see this error, pull the latest image:
 ```bash
-docker compose build --no-cache
+docker compose pull && docker compose up -d
 ```
 
 ### Authentication fails in Docker
