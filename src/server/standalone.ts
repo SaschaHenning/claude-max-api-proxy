@@ -44,10 +44,11 @@ async function main(): Promise<void> {
   console.log("  Authentication: OK\n");
 
   // Start server
+  const host = process.env.HOST || "127.0.0.1";
   try {
-    await startServer({ port });
+    await startServer({ port, host });
     console.log("\nServer ready. Test with:");
-    console.log(`  curl -X POST http://localhost:${port}/v1/chat/completions \\`);
+    console.log(`  curl -X POST http://${host}:${port}/v1/chat/completions \\`);
     console.log(`    -H "Content-Type: application/json" \\`);
     console.log(`    -d '{"model": "claude-sonnet-4", "messages": [{"role": "user", "content": "Hello!"}]}'`);
     console.log("\nPress Ctrl+C to stop.\n");

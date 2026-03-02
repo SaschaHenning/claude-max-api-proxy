@@ -1,8 +1,10 @@
-# Claude Code CLI Provider
+# Claude Max API Proxy
 
 **Use your Claude Max subscription ($200/month) with any OpenAI-compatible client — no separate API costs!**
 
 This provider wraps the Claude Code CLI as a subprocess and exposes an OpenAI-compatible HTTP API, allowing tools like Clawdbot, Continue.dev, or any OpenAI-compatible client to use your Claude Max subscription instead of paying per-API-call.
+
+> **This fork** adds Docker support and Portainer deployment instructions for self-hosting on Proxmox / any Docker host.
 
 ## Why This Exists
 
@@ -38,11 +40,117 @@ Your App (Clawdbot, etc.)
 - **Streaming support** — Real-time token streaming via Server-Sent Events
 - **Multiple models** — Claude Opus, Sonnet, and Haiku
 - **Session management** — Maintains conversation context
-- **Auto-start service** — Optional LaunchAgent for macOS
+- **Docker ready** — Run as a container on Proxmox, Synology, or any Docker host
+- **Portainer Stack** — One-click deployment via Portainer
 - **Zero configuration** — Uses existing Claude CLI authentication
 - **Secure by design** — Uses spawn() to prevent shell injection
 
-## Prerequisites
+---
+
+## Docker Deployment (Recommended)
+
+### Prerequisites
+
+- **Claude Max subscription** ($200/month) — [Subscribe here](https://claude.ai)
+- **Docker** and **Docker Compose** on your host (Proxmox LXC, VM, bare-metal, etc.)
+
+### Option A: Portainer Stack (Recommended for Proxmox)
+
+1. Open **Portainer** → **Stacks** → **Add Stack**
+2. Name: `claude-max-api-proxy`
+3. Select **Repository** as build method:
+   - **Repository URL**: `https://github.com/SaschaHenning/claude-max-api-proxy`
+   - **Repository reference**: `refs/heads/main`
+   - **Compose path**: `docker-compose.yml`
+4. Click **Deploy the stack**
+5. Wait for the build to complete (first build takes ~1–2 minutes)
+
+Alternatively, paste this **docker-compose** directly into the Portainer **Web editor**:
+
+```yaml
+services:
+  claude-proxy:
+    build: .
+    container_name: claude-max-api-proxy
+    restart: unless-stopped
+    ports:
+      - "3456:3456"
+    volumes:
+      - claude-config:/root/.claude
+    environment:
+      - PORT=3456
+      - HOST=0.0.0.0
+
+volumes:
+  claude-config:
+```
+
+> **Note:** If using the Web editor, Portainer cannot build from source. Use a pre-built image or deploy via Repository / CLI instead.
+
+### Option B: Docker Compose (CLI)
+
+```bash
+git clone https://github.com/SaschaHenning/claude-max-api-proxy.git
+cd claude-max-api-proxy
+docker compose up -d
+```
+
+### Option C: Docker Run
+
+```bash
+docker build -t claude-max-api-proxy .
+docker run -d \
+  --name claude-max-api-proxy \
+  --restart unless-stopped \
+  -p 3456:3456 \
+  -v claude-config:/root/.claude \
+  -e HOST=0.0.0.0 \
+  -e PORT=3456 \
+  claude-max-api-proxy
+```
+
+### Authenticate Claude CLI (Required Once)
+
+After the container is running, authenticate with your Claude Max account:
+
+```bash
+docker exec -it claude-max-api-proxy claude auth login
+```
+
+This opens an interactive prompt. Since the container is headless, the CLI will display a URL — open that URL in a browser on any device, complete the login, and the token is stored in the persistent volume.
+
+Credentials are saved in the `claude-config` Docker volume and survive container restarts and rebuilds.
+
+### Verify It Works
+
+```bash
+# Health check (replace with your Docker host IP)
+curl http://<host-ip>:3456/health
+
+# List models
+curl http://<host-ip>:3456/v1/models
+
+# Chat completion
+curl -X POST http://<host-ip>:3456/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3456` | Server port |
+| `HOST` | `0.0.0.0` | Bind address (`0.0.0.0` for Docker, `127.0.0.1` for local-only) |
+
+---
+
+## Local Installation (without Docker)
+
+### Prerequisites
 
 1. **Claude Max subscription** ($200/month) — [Subscribe here](https://claude.ai)
 2. **Claude Code CLI** installed and authenticated:
@@ -51,56 +159,19 @@ Your App (Clawdbot, etc.)
    claude auth login
    ```
 
-## Installation
+### Install & Run
 
 ```bash
-# Clone the repository
-git clone https://github.com/anthropics/claude-code-cli-provider.git
-cd claude-code-cli-provider
-
-# Install dependencies
+git clone https://github.com/SaschaHenning/claude-max-api-proxy.git
+cd claude-max-api-proxy
 npm install
-
-# Build
 npm run build
-```
-
-## Usage
-
-### Start the server
-
-```bash
 node dist/server/standalone.js
 ```
 
 The server runs at `http://localhost:3456` by default.
 
-### Test it
-
-```bash
-# Health check
-curl http://localhost:3456/health
-
-# List models
-curl http://localhost:3456/v1/models
-
-# Chat completion (non-streaming)
-curl -X POST http://localhost:3456/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "claude-opus-4",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-
-# Chat completion (streaming)
-curl -N -X POST http://localhost:3456/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "claude-opus-4",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "stream": true
-  }'
-```
+---
 
 ## API Endpoints
 
@@ -120,16 +191,6 @@ curl -N -X POST http://localhost:3456/v1/chat/completions \
 
 ## Configuration with Popular Tools
 
-### Clawdbot
-
-Clawdbot has **built-in support** for Claude CLI OAuth! Check your config:
-
-```bash
-clawdbot models status
-```
-
-If you see `anthropic:claude-cli=OAuth`, you're already using your Max subscription.
-
 ### Continue.dev
 
 Add to your Continue config:
@@ -140,7 +201,7 @@ Add to your Continue config:
     "title": "Claude (Max)",
     "provider": "openai",
     "model": "claude-opus-4",
-    "apiBase": "http://localhost:3456/v1",
+    "apiBase": "http://<host-ip>:3456/v1",
     "apiKey": "not-needed"
   }]
 }
@@ -152,7 +213,7 @@ Add to your Continue config:
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:3456/v1",
+    base_url="http://<host-ip>:3456/v1",
     api_key="not-needed"  # Any value works
 )
 
@@ -162,9 +223,11 @@ response = client.chat.completions.create(
 )
 ```
 
-## Auto-Start on macOS
+### n8n / Other Automation
 
-Create a LaunchAgent to start the provider automatically on login. See `docs/macos-setup.md` for detailed instructions.
+Use the **HTTP Request** node or any OpenAI-compatible integration with:
+- **Base URL**: `http://<host-ip>:3456/v1`
+- **API Key**: any non-empty string (e.g. `not-needed`)
 
 ## Architecture
 
@@ -185,52 +248,47 @@ src/
 │   ├── routes.ts          # API route handlers
 │   └── standalone.ts      # Entry point
 └── index.ts               # Package exports
+
+Docker files:
+├── Dockerfile             # Multi-stage build (build + runtime)
+├── docker-compose.yml     # Compose stack for Portainer / CLI
+├── entrypoint.sh          # Container startup script
+└── .dockerignore          # Build context filter
 ```
 
 ## Security
 
 - Uses Node.js `spawn()` instead of shell execution to prevent injection attacks
 - No API keys stored or transmitted by this provider
-- All authentication handled by Claude CLI's secure keychain storage
+- All authentication handled by Claude CLI's secure credential storage
 - Prompts passed as CLI arguments, not through shell interpretation
-
-## Cost Savings Example
-
-| Usage | API Cost | With This Provider |
-|-------|----------|-------------------|
-| 1M input tokens/month | ~$15 | $0 (included in Max) |
-| 500K output tokens/month | ~$37.50 | $0 (included in Max) |
-| **Monthly Total** | **~$52.50** | **$0 extra** |
-
-If you're already paying for Claude Max, this provider lets you use that subscription for API-style access at no additional cost.
 
 ## Troubleshooting
 
-### "Claude CLI not found"
+### "Claude CLI not found" (Docker)
 
-Install and authenticate the CLI:
+The CLI is bundled in the Docker image. If you see this error, the image may not have built correctly. Rebuild with:
 ```bash
-npm install -g @anthropic-ai/claude-code
-claude auth login
+docker compose build --no-cache
 ```
+
+### Authentication fails in Docker
+
+Re-run the auth command and follow the URL prompt:
+```bash
+docker exec -it claude-max-api-proxy claude auth login
+```
+
+### Server not reachable from other machines
+
+Ensure `HOST=0.0.0.0` is set (default in Docker). If you're behind a firewall, open port `3456`.
 
 ### Streaming returns immediately with no content
 
 Ensure you're using `-N` flag with curl (disables buffering):
 ```bash
-curl -N -X POST http://localhost:3456/v1/chat/completions ...
+curl -N -X POST http://<host-ip>:3456/v1/chat/completions ...
 ```
-
-### Server won't start
-
-Check that the Claude CLI is in your PATH:
-```bash
-which claude
-```
-
-## Contributing
-
-Contributions welcome! Please submit PRs with tests.
 
 ## License
 
@@ -238,5 +296,6 @@ MIT
 
 ## Acknowledgments
 
+- Original project by [atalovesyou](https://github.com/atalovesyou/claude-max-api-proxy)
 - Built for use with [Clawdbot](https://clawd.bot)
 - Powered by [Claude Code CLI](https://github.com/anthropics/claude-code)

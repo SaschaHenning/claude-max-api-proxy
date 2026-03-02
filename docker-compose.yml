@@ -1,0 +1,15 @@
+services:
+  claude-proxy:
+    build: .
+    container_name: claude-max-api-proxy
+    restart: unless-stopped
+    ports:
+      - "3456:3456"
+    volumes:
+      - claude-config:/root/.claude
+    environment:
+      - PORT=3456
+      - HOST=0.0.0.0
+
+volumes:
+  claude-config:
